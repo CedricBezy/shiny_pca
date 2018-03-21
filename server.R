@@ -12,16 +12,14 @@ shinyServer(function(input, output, session)
     ##==============================================.
     ## UPLOAD DATA
     ##==============================================.
-    ## importTransit is a reactive function which import a file
-    ## "transit_file" corresponds to transition data
-    
-    Data <- reactiveValues()
+    ## This reactive function consists on importing Data.
+    ## The user can choose an available data or import a csv file.
     
     ImportData <- reactive({
         ## path
         style_upload <- input$style_upload
         if(style_upload == "exists"){
-            Data <<- switch(
+            Data <- switch(
                 input$upload_df,
                 "diamonds" = diamonds,
                 "iris" = iris,
@@ -33,10 +31,10 @@ shinyServer(function(input, output, session)
             path <- input$upload_file
             ## Read CSV
             if(is.null(path)){ 
-                Data <<- NULL
+                Data <- NULL
             }else{
                 ## importation
-                Data <<- read.csv2(
+                Data <- read.csv2(
                     path$datapath,
                     header = TRUE,
                     sep = input$file_sep,
@@ -56,13 +54,16 @@ shinyServer(function(input, output, session)
         return(Data)
     })
     
+    # Output Data
     output$dataOutput <- renderTable(ImportData())
+    output$dataname <- renderText(input$upload_df)
     
     ##==============================================.
     ## UPLOAD DATA
     ##==============================================.
-    
+    ##---------------------
     ## VARIABLE
+    ##---------------------
     Selectors_Pca_Vars <- reactive({
         # features columns
         oknum <- sapply(ImportData(), is.numeric)
@@ -84,7 +85,9 @@ shinyServer(function(input, output, session)
     })
     output$select_pca_vars <- renderUI(Selectors_Pca_Vars())
     
+    ##---------------------
     ## QUANTI SUP
+    ##---------------------
     Selectors_Pca_QuantiSup <- reactive({
         # features columns
         oknum <- sapply(ImportData(), is.numeric)
@@ -105,11 +108,15 @@ shinyServer(function(input, output, session)
     })
     output$select_pca_quanti_sup <- renderUI(Selectors_Pca_QuantiSup())
     
+    ##---------------------
     ## QUALI SUP
+    ##---------------------
     Selectors_Pca_QualiSup <- reactive({
         # features columns
-        oknum <- sapply(ImportData(), is.numeric)
-        varsfact <- names(which(!oknum))
+        data <- ImportData()
+        oknum <- sapply(data, is.numeric)
+        okid <- sapply(data, nb_values) == nrow(data)
+        varsfact <- names(which(!oknum & !okid))
         
         # quali_sup selector
         ui_qualisup <- selectizeInput(
@@ -128,7 +135,9 @@ shinyServer(function(input, output, session)
     })
     output$select_pca_quali_sup <- renderUI(Selectors_Pca_QualiSup())
     
+    ##---------------------
     ## IND SUP
+    ##---------------------
     Selectors_Pca_IndSup <- reactive({
         vchoices <- if(input$pca_id == "rownames"){
             rownames(ImportData())
@@ -136,7 +145,7 @@ shinyServer(function(input, output, session)
             ImportData()[[input$pca_id]]
         }
         ui_indsup <- selectizeInput(
-            inputId = "pca_inds_sup",
+            inputId = "pca_ind_sup",
             label = "Ind Sup",
             choices = vchoices,
             multiple = TRUE,
@@ -148,6 +157,23 @@ shinyServer(function(input, output, session)
     })
     output$select_pca_ind_sup <- renderUI(Selectors_Pca_IndSup())
     
+    ##==============================================.
+    ## Test
+    ##==============================================.
+    
+    output$test_output <- renderPrint({
+        list(
+            id = input$pca_id,
+            main = input$pca_main_vars,
+            quanti_sup = input$pca_quanti_sup,
+            quali_sup = input$pca_quali_sup,
+            ind_sup = input$pca_ind_sup
+        )
+    })
+    
+    ##==============================================.
+    ## Make PCA
+    ##==============================================.
     
     MakePca <- eventReactive(input$button_pca, {
         # update axis
@@ -161,7 +187,8 @@ shinyServer(function(input, output, session)
                    input$pca_quali_sup)
         if(length(vsups) == 0){vsups <- NULL}
         
-        indsups <- input$pca_inds_sup
+        indsups <- input$pca_ind_sup
+        if(vid == "rownames"){indsups <- as.numeric(indsups)}
         if(length(indsups) == 0){indsups <- NULL}
         
         Pca <- make_pca(
@@ -176,13 +203,13 @@ shinyServer(function(input, output, session)
        
         ncp <- Pca$call$ncp
         axisNames <- sprintf("PC.%i (%.2f%%)", 1:ncp, dfEigs$PCT_INERTIA)
-        updateSelectInput(
+        updateSelectizeInput(
             session = session,
             inputId = "axis_x",
             choices = setNames(1:ncp, axisNames),
             selected = 1
         )
-        updateSelectInput(
+        updateSelectizeInput(
             session = session,
             inputId = "axis_y",
             choices = setNames(1:ncp, axisNames),
@@ -196,18 +223,17 @@ shinyServer(function(input, output, session)
         return(reslist)
     })
     
-    output$test_output <- renderPrint({
-        list(
-            id = input$pca_id,
-            main = input$pca_main_vars,
-            quanti_sup = input$pca_quanti_sup,
-            quali_sup = input$pca_quali_sup
-        )
-    })
+    ##==============================================.
+    ## Output Eigs
+    ##==============================================.
     
     output$eigens_data <- renderTable({
         MakePca()$eigs
     })
+    
+    ##==============================================.
+    ## Output Plots
+    ##==============================================.
     
     OutputPlots <- reactive({
         pca <- MakePca()$pca
@@ -231,9 +257,24 @@ shinyServer(function(input, output, session)
             )
         )
     })
-    output$ind_plot <- renderPlotly(OutputPlots()$ind)
-    output$correl_plot <- renderPlotly(OutputPlots()$correl)
-    output$quali_plot <- renderPlotly(OutputPlots()$quali)
+    output$ind_plot <- renderPlotly({
+        p <- OutputPlots()$ind
+        p$elementId <- NULL
+        p <- layout(p, autosize=TRUE, showlegend = TRUE)
+        p
+    })
+    output$correl_plot <- renderPlotly({
+        p <- OutputPlots()$correl
+        p$elementId <- NULL
+        p <- layout(p, autosize=TRUE, showlegend = TRUE)
+        p
+    })
+    output$quali_plot <- renderPlotly({
+        p <- OutputPlots()$quali
+        p$elementId <- NULL
+        p <- layout(p, autosize=TRUE, showlegend = TRUE)
+        p
+    })
     
     
     #####################################################################.

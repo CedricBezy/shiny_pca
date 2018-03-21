@@ -89,6 +89,7 @@ shinyUI(
                 ##------------------------.
                 ## TabSetPanel
                 ##------------------------.
+                textOutput("dataname"),
                 sidebarLayout(
                     sidebarPanel(
                         width = 12,
@@ -127,15 +128,24 @@ shinyUI(
                                 title = "Plots",
                                 sidebarLayout(
                                     sidebarPanel(
-                                        selectInput(
+                                        width = 4,
+                                        selectizeInput(
                                             inputId = "axis_x",
                                             label = "Component X",
-                                            choices = NULL
+                                            choices = NULL,
+                                            multiple = FALSE,
+                                            options = list(
+                                                placeholder = '---'
+                                            )
                                         ),
-                                        selectInput(
+                                        selectizeInput(
                                             inputId = "axis_y",
                                             label = "Component Y",
-                                            choices = NULL
+                                            choices = NULL,
+                                            multiple = FALSE,
+                                            options = list(
+                                                placeholder = '---'
+                                            )
                                         )
                                     ),
                                     mainPanel(
